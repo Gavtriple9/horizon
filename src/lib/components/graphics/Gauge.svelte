@@ -1,5 +1,6 @@
 <script lang="ts">
   import { arc } from "d3";
+  import { onMount } from "svelte";
   import type { DefaultArcObject } from "d3";
   import { clamp, lerp, normalizeClamped } from "$lib/utils/interpolate";
 
@@ -9,6 +10,8 @@
     min?: number;
     max?: number;
     size?: number;
+    warnThreshold?: number;
+    dangerThreshold?: number;
     thickness?: number;
     trackColor?: string;
     fillColor?: string;
@@ -16,26 +19,28 @@
     displayAsPercent?: boolean;
   }
 
-  const START_ANGLE = toRadians(-120);
-  const END_ANGLE = toRadians(120);
-  const THRESHOLD_SEGMENTS = [
-    { start: 0, end: 0.7, color: "#22c55e" },
-    { start: 0.7, end: 0.9, color: "#facc15" },
-    { start: 0.9, end: 1.0, color: "#ef4444" },
-  ];
-
   let {
     value,
 
     min = 0,
     max = 1,
-    size = 140,
-    thickness = 20,
+    size = 0,
+    warnThreshold = 0.7,
+    dangerThreshold = 0.9,
+    thickness = 0.2,
     trackColor = "rgba(148, 163, 184, 0.25)",
     fillColor = "#38bdf8",
     backgroundColor = "transparent",
     displayAsPercent = true,
   }: Props = $props();
+
+  const START_ANGLE = toRadians(-120);
+  const END_ANGLE = toRadians(120);
+  const THRESHOLD_SEGMENTS = [
+    { start: 0, end: warnThreshold, color: "#22c55e" },
+    { start: warnThreshold, end: dangerThreshold, color: "#facc15" },
+    { start: dangerThreshold, end: 1.0, color: "#ef4444" },
+  ];
 
   const arcFactory = arc();
   const outerArcFactory = arc();
@@ -45,29 +50,73 @@
   let normalizedValue = $state(0);
   let outerSegments = $state<{ path: string; color: string }[]>([]);
   let computedFillColor = $state(fillColor);
+  let measuredSize = $state(0);
+  let gaugeSize = $derived(Math.max(measuredSize || size || 0, 0));
+  let fontSize = $derived(gaugeSize * 0.18);
+  let showValue = $derived(gaugeSize >= 64);
   let displayValue = $derived(
     displayAsPercent ? `${(normalizedValue * 100).toFixed(1)}%` : `${value}`
   );
+  let viewBoxSize = $derived(gaugeSize > 0 ? gaugeSize : 1);
 
   let ariaMin = $derived(Math.min(min, max));
   let ariaMax = $derived(Math.max(min, max));
   let ariaValue = $derived(clamp(value, ariaMin, ariaMax));
 
+  let container: HTMLDivElement | null = null;
+
+  onMount(() => {
+    if (typeof ResizeObserver === "undefined" || !container) {
+      measuredSize = size;
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        const nextSize = Math.min(width, height);
+        if (Number.isFinite(nextSize) && nextSize > 0) {
+          measuredSize = nextSize;
+        }
+      }
+    });
+
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  });
+
   $effect(() => {
-    const overallRadius = size / 2;
-    const ringThickness = Math.max(thickness, 0);
-    const outerRingThickness = Math.min(
-      Math.max(ringThickness * 0.35, 2),
-      Math.max(overallRadius, 0)
+    normalizedValue = normalizeClamped(value, min, max);
+
+    if (gaugeSize <= 0) {
+      trackPath = "";
+      fillPath = "";
+      outerSegments = [];
+      computedFillColor = fillColor;
+      return;
+    }
+
+    const radius = gaugeSize / 2;
+    const normalizedThickness = clamp(
+      gaugeSize > 0
+        ? thickness > 1
+          ? thickness / radius
+          : thickness
+        : thickness,
+      0,
+      1
     );
-    const gap = Math.min(
-      Math.max(outerRingThickness * 0.2, 1),
-      Math.max(overallRadius - outerRingThickness, 0)
+    const ringThickness = Math.max(normalizedThickness * radius, 0);
+    const outerRingRatio = clamp(
+      normalizedThickness > 0 ? normalizedThickness * 0.35 : 0.08,
+      0.04,
+      0.25
     );
-    const mainOuterRadius = Math.max(
-      overallRadius - outerRingThickness - gap,
-      0
-    );
+    const outerRingThickness = outerRingRatio * radius;
+    const gapRatio = clamp(outerRingRatio * 0.6, 0.02, 0.12);
+    const gap = gapRatio * radius;
+    const mainOuterRadius = Math.max(radius - outerRingThickness - gap, 0);
     const innerRadius = Math.max(mainOuterRadius - ringThickness, 0);
 
     arcFactory
@@ -84,8 +133,6 @@
 
     trackPath = arcFactory(baseArc) ?? "";
 
-    normalizedValue = normalizeClamped(value, min, max);
-
     if (normalizedValue <= 0) {
       fillPath = "";
     } else {
@@ -98,11 +145,11 @@
         }) ?? "";
     }
 
-    const outerInnerRadius = Math.max(overallRadius - outerRingThickness, 0);
+    const outerInnerRadius = Math.max(radius - outerRingThickness, 0);
 
     outerArcFactory
       .innerRadius(outerInnerRadius)
-      .outerRadius(overallRadius)
+      .outerRadius(radius)
       .cornerRadius(0);
 
     outerSegments = THRESHOLD_SEGMENTS.map((segment) => {
@@ -116,7 +163,7 @@
       const segmentPath =
         outerArcFactory({
           innerRadius: outerInnerRadius,
-          outerRadius: overallRadius,
+          outerRadius: radius,
           startAngle: lerp(START_ANGLE, END_ANGLE, segmentStart),
           endAngle: lerp(START_ANGLE, END_ANGLE, segmentEnd),
         }) ?? "";
@@ -140,74 +187,39 @@
 </script>
 
 <div
-  class="BarGauge"
-  style={`--gauge-size: ${size}px; --gauge-track: ${trackColor}; --gauge-fill: ${computedFillColor}; --gauge-background: ${backgroundColor};`}
+  bind:this={container}
+  class="relative inline-flex aspect-square w-full max-w-full items-center justify-center rounded-full"
+  style:background-color={backgroundColor}
   role="progressbar"
   aria-valuemin={ariaMin}
   aria-valuemax={ariaMax}
   aria-valuenow={ariaValue}
 >
   <svg
-    width={size}
-    height={size}
-    viewBox={`0 0 ${size} ${size}`}
+    class="h-full w-full"
+    width="100%"
+    height="100%"
+    viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
     aria-hidden="true"
   >
-    <g transform={`translate(${size / 2}, ${size / 2})`}>
+    <g transform={`translate(${viewBoxSize / 2}, ${viewBoxSize / 2})`}>
       {#each outerSegments as segment (segment.path)}
-        <path class="BarGauge__outer" d={segment.path} fill={segment.color} />
+        <path d={segment.path} fill={segment.color} />
       {/each}
-      <path class="BarGauge__track" d={trackPath} />
+      <path d={trackPath} fill={trackColor} />
       {#if normalizedValue > 0}
-        <path class="BarGauge__fill" d={fillPath} />
+        <path d={fillPath} fill={computedFillColor} />
       {/if}
     </g>
   </svg>
-  <div class="BarGauge__content">
-    <span class="BarGauge__value">{displayValue}</span>
+  <div class="absolute inset-0 flex items-center justify-center">
+    {#if showValue}
+      <span
+        class="text-center font-semibold leading-none"
+        style={`font-size: ${fontSize}px; color: ${computedFillColor};`}
+      >
+        {displayValue}
+      </span>
+    {/if}
   </div>
 </div>
-
-<style>
-  .BarGauge {
-    --gauge-size: 160px;
-    --gauge-track: rgba(148, 163, 184, 0.25);
-    --gauge-fill: #38bdf8;
-    --gauge-background: transparent;
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--gauge-size);
-    height: var(--gauge-size);
-    background-color: var(--gauge-background);
-    border-radius: 9999px;
-  }
-
-  svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  .BarGauge__track {
-    fill: var(--gauge-track);
-  }
-
-  .BarGauge__fill {
-    fill: var(--gauge-fill);
-  }
-
-  .BarGauge__content {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .BarGauge__value {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--gauge-fill);
-  }
-</style>

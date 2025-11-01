@@ -7,14 +7,26 @@
   import Timeseries from "$lib/components/plots/TimeSeries.svelte";
 </script>
 
-<div class="main-demo">
+<div class="main-demo bg-gray-600">
   <BarGauge />
-  <Gauge value={0.00123} />
-  <Gauge value={0.22235} />
-  <Gauge value={0.2312} />
-  <Gauge value={0.7215} />
-  <Gauge value={1.021} />
-  <Model />
+  <div class="flex flex-row flex-wrap gap-4">
+    <div class="basis-[15%] min-w-[120px]">
+      <Gauge value={0.00123} />
+    </div>
+    <div class="basis-[15%] min-w-[120px]">
+      <Gauge value={0.22235} />
+    </div>
+    <div class="basis-[15%] min-w-[120px]">
+      <Gauge value={0.2312} />
+    </div>
+    <div class="basis-[15%] min-w-[120px]">
+      <Gauge value={0.7215} />
+    </div>
+    <div class="basis-[15%] min-w-[120px]">
+      <Gauge value={1.021} />
+    </div>
+  </div>
+  <Model src="/models/DragonAttenuation.glb" />
   <Stat />
   <Timeseries />
 </div>
