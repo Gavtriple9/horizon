@@ -13,6 +13,7 @@
     trackColor?: string;
     fillColor?: string;
     backgroundColor?: string;
+    displayAsPercent?: boolean;
   }
 
   const START_ANGLE = toRadians(-120);
@@ -28,11 +29,12 @@
 
     min = 0,
     max = 1,
-    size = 100,
+    size = 140,
     thickness = 20,
     trackColor = "rgba(148, 163, 184, 0.25)",
     fillColor = "#38bdf8",
     backgroundColor = "transparent",
+    displayAsPercent = true,
   }: Props = $props();
 
   const arcFactory = arc();
@@ -43,6 +45,9 @@
   let normalizedValue = $state(0);
   let outerSegments = $state<{ path: string; color: string }[]>([]);
   let computedFillColor = $state(fillColor);
+  let displayValue = $derived(
+    displayAsPercent ? `${(normalizedValue * 100).toFixed(1)}%` : `${value}`
+  );
 
   let ariaMin = $derived(Math.min(min, max));
   let ariaMax = $derived(Math.max(min, max));
@@ -159,7 +164,7 @@
     </g>
   </svg>
   <div class="BarGauge__content">
-    <span class="BarGauge__value">{value}</span>
+    <span class="BarGauge__value">{displayValue}</span>
   </div>
 </div>
 
@@ -203,6 +208,6 @@
   .BarGauge__value {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--gauge-fill);
   }
 </style>

@@ -9,11 +9,11 @@
 
 <div class="main-demo">
   <BarGauge />
-  <Gauge value={0.0} />
-  <Gauge value={0.25} />
-  <Gauge value={0.5} />
-  <Gauge value={0.75} />
-  <Gauge value={1.0} />
+  <Gauge value={0.00123} />
+  <Gauge value={0.22235} />
+  <Gauge value={0.2312} />
+  <Gauge value={0.7215} />
+  <Gauge value={1.021} />
   <Model />
   <Stat />
   <Timeseries />
