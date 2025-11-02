@@ -1,15 +1,23 @@
 <script lang="ts">
   import * as d3 from "d3";
   import { onMount } from "svelte";
+  import { normalizeClamped } from "$lib/utils/interpolate";
 
   interface Props {
     value: number;
     min?: number;
     max?: number;
     label?: string;
+    displayAsPercent?: boolean;
   }
 
-  let { value, min = 0, max = 1, label = "value" }: Props = $props();
+  let {
+    value,
+    min = 0,
+    max = 1,
+    label = "value",
+    displayAsPercent = false,
+  }: Props = $props();
 
   const gaugeHeight = 12;
   const markerWidth = 3;
@@ -25,10 +33,18 @@
   let fill: d3.Selection<SVGRectElement, unknown, any, any> | null = null;
   let marker: d3.Selection<SVGRectElement, unknown, any, any> | null = null;
 
-  const formatValue = d3.format(".2f");
-  const formattedValue = $derived.by(() =>
-    Number.isFinite(value) ? formatValue(value) : "--"
-  );
+  const percentFormat = d3.format(".1f");
+  const valueFormat = d3.format(".2f");
+  const normalizedValue = $derived.by(() => normalizeClamped(value, min, max));
+  const formattedValue = $derived.by(() => {
+    if (!Number.isFinite(value)) {
+      return "--";
+    }
+    if (displayAsPercent) {
+      return `${percentFormat(normalizedValue * 100)}%`;
+    }
+    return valueFormat(value);
+  });
 
   function normalizeDomain(): [number, number] {
     let lower = Number.isFinite(min) ? min : 0;
@@ -231,16 +247,20 @@
 
   .BarGauge__label {
     font-size: 0.875rem;
-    color: var(--bar-gauge-label, rgba(226, 232, 240, 0.86));
+    color: var(--bar-gauge-label, #000000);
     white-space: nowrap;
   }
 
   .BarGauge__value {
     font-variant-numeric: tabular-nums;
     font-size: 0.875rem;
-    color: var(--bar-gauge-value, rgba(226, 232, 240, 0.86));
+    color: var(--bar-gauge-value, #22c55e);
     white-space: nowrap;
     text-align: right;
+    padding-left: 0.5rem;
+    min-width: 4.5rem;
+    display: inline-flex;
+    justify-content: flex-end;
   }
 
   .BarGauge__meter {
@@ -254,7 +274,7 @@
   }
 
   :global(.BarGauge__fill) {
-    fill: var(--bar-gauge-fill, #5b8def);
+    fill: var(--bar-gauge-fill, #22c55e);
   }
 
   :global(.BarGauge__track) {
@@ -264,6 +284,6 @@
   }
 
   :global(.BarGauge__marker) {
-    fill: var(--bar-gauge-marker, #cbd5f5);
+    fill: var(--bar-gauge-marker, #000000);
   }
 </style>

@@ -15,7 +15,6 @@
     type Object3D,
   } from "three";
   import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-  import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 
   export let src: string | null = null;
   export let background: ColorRepresentation | "transparent" = "transparent";
@@ -71,12 +70,7 @@
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.enablePan = false;
-    camera.position.set(0, 0, 5);
-    controls.target.set(0, 0, 0);
-    controls.update();
+    camera.position.set(0, 0, 0);
 
     const ambient = new AmbientLight(0xffffff, 0.7);
     const directional = new DirectionalLight(0xffffff, 0.8);
@@ -120,9 +114,8 @@
     const fitCameraToObject = (object: Object3D) => {
       const box = new Box3().setFromObject(object);
       if (box.isEmpty()) {
-        camera.position.set(0, 0, 5);
-        controls.target.set(0, 0, 0);
-        controls.update();
+        camera.position.set(0, 0, 0);
+        camera.lookAt(0, 0, 0);
         return;
       }
 
@@ -131,7 +124,7 @@
       const maxDim = Math.max(size.x, size.y, size.z);
       const fov = camera.fov * (Math.PI / 180);
       const distance = maxDim / (2 * Math.tan(fov / 2));
-      const offset = 1.5;
+      const offset = 0.6;
 
       camera.position.set(
         center.x + distance * offset,
@@ -141,13 +134,10 @@
       camera.near = Math.max(distance / 100, 0.01);
       camera.far = Math.max(distance * 100, camera.near + 10);
       camera.updateProjectionMatrix();
-
-      controls.target.copy(center);
-      controls.update();
+      camera.lookAt(center);
     };
 
     renderer.setAnimationLoop(() => {
-      controls.update();
       renderer.render(scene, camera);
     });
 
@@ -200,10 +190,6 @@
       renderer.render(scene, camera);
     };
 
-    updateAutoRotate = (value) => {
-      controls.autoRotate = value;
-    };
-
     if (background) {
       updateBackground(background);
     }
@@ -211,7 +197,6 @@
     cleanup = () => {
       renderer.setAnimationLoop(null);
       resizeObserver.disconnect();
-      controls.dispose();
       clearModel?.();
       renderer.dispose();
       if (container && renderer.domElement.parentElement === container) {
